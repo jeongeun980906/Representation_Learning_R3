@@ -1,0 +1,10 @@
+Epoch: 0 loss: 1.995 encoder loss: 1.618 policy loss: 0.377
+Epoch: 1 loss: 1.507 encoder loss: 1.485 policy loss: 0.023
+Epoch: 2 loss: 1.499 encoder loss: 1.482 policy loss: 0.017
+Epoch: 3 loss: 1.495 encoder loss: 1.482 policy loss: 0.014
+Epoch: 4 loss: 1.492 encoder loss: 1.481 policy loss: 0.011
+Epoch: 5 loss: 1.489 encoder loss: 1.481 policy loss: 0.008
+Epoch: 6 loss: 1.486 encoder loss: 1.481 policy loss: 0.005
+Epoch: 7 loss: 1.485 encoder loss: 1.481 policy loss: 0.004
+Epoch: 8 loss: 1.484 encoder loss: 1.481 policy loss: 0.003
+Epoch: 9 loss: 1.483 encoder loss: 1.481 policy loss: 0.002

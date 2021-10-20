@@ -5,7 +5,6 @@ import torch.utils.data as data
 
 expert_dataset_name = ['expert_s.pkl','exert_a.pkl']
 fail_dataset_name = ['fail_s.pkl','fail_a.pkl']
-
 class torcs_dataset(data.Dataset):
     def __init__(self,root='./dataset/',train=True,split=0.1,num_traj=3):
         self.root = root
@@ -23,7 +22,7 @@ class torcs_dataset(data.Dataset):
             data = pickle.load(f)
         f.close()
         fail_s = np.asarray(data) # [24335 x 29]
-
+        
         with open(root + 'fail_a.pkl', 'rb') as f:
             data = pickle.load(f)
         f.close()
@@ -52,7 +51,7 @@ class torcs_dataset(data.Dataset):
         # Train Test Split
         if not train:
             self.exper_traj = self.exper_traj[:int(num_expert*split)]
-            self.fail_traj = self.y[:int(num_fail*split)]
+            self.fail_traj = self.fail_traj[:int(num_fail*split)]
         else:
             self.exper_traj = self.exper_traj[int(num_expert*split):]
             self.fail_traj = self.fail_traj[int(num_fail*split):]
