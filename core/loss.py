@@ -36,6 +36,6 @@ def BT_loss(u,v):
     C = torch.bmm(u,v)
     C = torch.mean(C,dim=0) # [z x z]
     mask = torch.eye(C.size(0)).to('cuda')
-    loss = mask*torch.square(C) + 0.1*torch.square(1-C)*(torch.ones_like(mask)-mask)
+    loss = mask*torch.square(C) + 0.01*torch.square(1-C)*(torch.ones_like(mask)-mask)
     loss = torch.sum(loss)
     return loss
