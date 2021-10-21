@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-import torch.distributions as TD
-from torch.autograd import Variable
 import numpy as np
 
 '''
@@ -56,9 +53,9 @@ class NONAME_model(nn.Module):
 
     def forward(self,x):
         z = self.encoder(x)
-        ex_state = x[:,:self.s_dim]
+        state = x[:,:self.s_dim]
         #ex_action = x[:,self.s_dim+1:self.s_dim+self.a_dim+1].to(self.device)
-        inputs = torch.cat((ex_state,z),dim=1)
+        inputs = torch.cat((state,z),dim=1)
         pred = self.policy(inputs)
         return pred,z
     def init_param(self):

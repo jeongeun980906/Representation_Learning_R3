@@ -1,9 +1,9 @@
 {
   "eval_only": false,
-  "id": 2,
+  "id": 3,
   "batch_size": 128,
   "lr": 0.0005,
   "num_traj": 3,
-  "loss": "BT",
-  "policy": "mlp"
+  "loss": "simclr",
+  "policy": "mdn"
 }

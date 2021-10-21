@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 from utils.dataloader import torcs_dataset
 from utils.utils import print_n_txt
 from core.net import NONAME_model
-from core.loss import simclr_loss,BT_loss
+from core.mixture_network import Mixture_model
+from core.loss import simclr_loss,BT_loss,mdn_loss
 
 import torch.nn.functional as F
 
@@ -30,7 +31,12 @@ class SOLVER():
         self.s_dim = 29
 
     def load_model(self):
-        self.model = NONAME_model(x_dim=int(self.args.num_traj*31)).to(self.device)
+        if self.args.policy == 'mlp':
+            self.model = NONAME_model(x_dim=int(self.args.num_traj*31)).to(self.device)
+            self.weight = [1,1]
+        elif self.args.policy == 'mdn':
+            self.model = Mixture_model(x_dim=int(self.args.num_traj*31),k=5,sig_max=None).to(self.device)
+            self.weight = [1,0.01]
         self.model.init_param()
 
     def train(self):
@@ -41,9 +47,13 @@ class SOLVER():
         self.ploss = []
         self.eloss = []
         if self.args.loss=='simclr':
-            criterion = simclr_loss
+            ecriterion = simclr_loss
         elif self.args.loss == 'BT':
-            criterion = BT_loss
+            ecriterion = BT_loss
+        if self.args.policy == 'mlp':
+            pcriterion = F.mse_loss
+        elif self.args.policy == 'mdn':
+            pcriterion = mdn_loss
         optimizer = torch.optim.Adam(self.model.parameters(), self.lr)
         for e in range(10):
             total_loss = 0
@@ -56,10 +66,10 @@ class SOLVER():
                 f_pred,f_sampled_z = self.model(fail_traj.to(self.device))
                 f_action = fail_traj[:,self.s_dim+1:self.s_dim+self.a_dim+1].to(self.device)
                 
-                encoder_loss = criterion(ex_sampled_z,f_sampled_z) # encoder loss
-                policy_loss = F.mse_loss(ex_pred,ex_action) + F.mse_loss(f_pred,f_action) # Policy Loss
+                encoder_loss = ecriterion(ex_sampled_z,f_sampled_z) # encoder loss
+                policy_loss = pcriterion(ex_pred,ex_action) + pcriterion(f_pred,f_action) # Policy Loss
                 
-                loss = encoder_loss + policy_loss
+                loss = self.weight[0]*encoder_loss + self.weight[1]*policy_loss
                 
                 optimizer.zero_grad()
                 loss.backward()

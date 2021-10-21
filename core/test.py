@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 from utils.dataloader import torcs_dataset
 from utils.plot import plot_tsne
 from core.net import NONAME_model
+from core.mixture_network import Mixture_model
+from core.loss import mdn_sample
 import torch.nn.functional as F
 
 class test_class():
@@ -22,7 +24,10 @@ class test_class():
         return config
 
     def load_model(self):
-        self.model = NONAME_model(x_dim=int(self.config['num_traj']*31)).to(self.device)
+        if self.config['policy'] == 'mlp':
+            self.model = NONAME_model(x_dim=int(self.config['num_traj']*31)).to(self.device)
+        else:
+            self.model = Mixture_model(x_dim=int(self.config['num_traj']*31)).to(self.device)
         state_dict = torch.load(self.path+'model_final.pt')
         self.model.load_state_dict(state_dict)
     
@@ -40,6 +45,9 @@ class test_class():
                 e_action = expert_traj[:,self.s_dim+1:self.s_dim+self.a_dim+1].to(self.device)
                 f_pred, fz = self.model(fail_traj.to(self.device))
                 f_action = fail_traj[:,self.s_dim+1:self.s_dim+self.a_dim+1].to(self.device)
+            if self.config['policy'] == 'mdn':
+                e_pred = mdn_sample(e_pred)
+                f_pred = mdn_sample(f_pred)
             e_test_mse_loss = F.mse_loss(e_pred,e_action)
             f_test_mse_loss = F.mse_loss(f_pred,f_action)
             e_loss.append(e_test_mse_loss.cpu().item())
@@ -48,7 +56,7 @@ class test_class():
             label.append(0)
             latent.append(fz.squeeze(0).cpu().numpy().tolist())
             label.append(1)
-        plot_tsne(latent,label,self.path)
+        plot_tsne(latent,label,self.path,self.config)
         total_loss = f_loss+e_loss
         mean_total= sum(total_loss)/len(total_loss)
         mean_e = sum(e_loss)/len(e_loss)

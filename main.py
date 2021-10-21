@@ -9,6 +9,7 @@ parser.add_argument('--batch_size', type=int,default=128,help='batch size')
 parser.add_argument('--lr', type=float,default=5e-4,help='learning rate')
 parser.add_argument('--num_traj', type=int,default=3,help='# of state/action stacked')
 parser.add_argument('--loss', type=str,default='simclr',help='Encoder Loss',choices=['simclr','BT'])
+parser.add_argument('--policy', type=str,default='mlp',help='Polcy struture',choices=['mlp','mdn'])
 args = parser.parse_args()
 if args.eval_only:
     test = test_class(args.id)
