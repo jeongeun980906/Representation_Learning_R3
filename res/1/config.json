@@ -1,9 +1,14 @@
 {
-  "eval_only": false,
+  "data": "syn",
+  "eval": false,
+  "PN": false,
   "id": 1,
-  "batch_size": 128,
-  "lr": 0.0005,
-  "num_traj": 3,
+  "simulate": false,
+  "batch_size": 4,
+  "lr": 0.001,
+  "num_traj": 50,
   "loss": "simclr",
-  "policy": "mlp"
+  "recon_loss": false,
+  "policy": "mlp",
+  "encoder": "mlp"
 }

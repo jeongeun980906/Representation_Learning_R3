@@ -1,35 +1,59 @@
 import math
 from numpy import NaN
 import torch
+import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.distributions as TD
 
 ONEOVERSQRT2PI = 1.0 / math.sqrt(2*math.pi)
-T=2
+T=0.1
 device = 'cuda'
 
-def l1(i,j,s,N):
-    non = torch.sum(torch.exp(s[i,:N]/T))-torch.exp(s[i,i]/T)
-    return 100*torch.exp(s[i,j]/T)/non
+def l1(i,j,s):
+    non = torch.sum(torch.exp(s[i,:]/T))-torch.exp(s[i,i]/T)
+    return -torch.log(torch.exp(s[i,j]/T)/non+1e-6)
 
-def l2(i,j,s,N):
-    non = torch.sum(torch.exp(s[i,N:]/T))-torch.exp(s[i,i]/T)
-    return 100*torch.exp(s[i,j]/T)/non
 
-def simclr_loss(u,v):
+def INFONCE_loss(u,v):
     '''
-    expert u [N x z]
-    fail v [N x z]
+    traj1 [N x z]
+    traj2 [N x z]
     '''
     N = v.size(0)
-    z = torch.cat((u,v))
+    z_dim = v.size(1)
+    z = torch.cat((u,v),dim=1) # [N x 2V] 
+    z = z.view(-1,z_dim) # [2N x V]
     # print(z)
     z = torch.nn.functional.normalize(z, dim=-1)
-    # print(z)
     s = torch.matmul(z, z.T) # [2N x 2N]
+    # print(s)
     loss = 0
     for k in range(N):
-        loss+= l1(k,N+k,s,N) + l2(N+k,k,s,N)
+        loss+= l1(2*k,2*k+1,s)+l1(2*k+1,2*k,s)
+    loss /= (2*N)
+    return loss
+
+def MAINFONCE_loss(u,v):
+    '''
+    traj1 u : mu [N x k x z]
+            : sigma [N x z]
+            : pi [N x k]
+    traj2 z : mu [N x k x z]
+            : sigma [N x z]
+            : pi [N x k]
+    '''
+    N = v.size(0)
+    z_dim = v.size(2)
+    k = v.size(1)
+    z = torch.cat((u['mu'],v['mu']),dim=-1) # [N x k x 2V] 
+    z = z.view(-1,k,z_dim) # [2N x k x V]
+    # print(z)
+    z = torch.nn.functional.normalize(z, dim=-1)
+    s = torch.matmul(z, z.T) # [2N x 2N]
+    # print(s)
+    loss = 0
+    for k in range(N):
+        loss+= l1(2*k,2*k+1,s)+l1(2*k+1,2*k,s)
     loss /= (2*N)
     return loss
 
@@ -44,7 +68,7 @@ def BT_loss(u,v):
     C = torch.bmm(u,v)
     C = torch.mean(C,dim=0) # [z x z]
     mask = torch.eye(C.size(0)).to('cuda')
-    loss = mask*torch.square(C) + 0.01*torch.square(1-C)*(torch.ones_like(mask)-mask)
+    loss = mask*torch.square(1-C) + 0.01*torch.square(C)*(torch.ones_like(mask)-mask)
     loss = torch.sum(loss)
     return loss
 
@@ -112,3 +136,6 @@ def mdn_sample(out):
         mu_i,sigma_i = mu[i_idx,mixture_idx],sigma[i_idx,mixture_idx]
         sample[i_idx] = eps[i_idx].mul(sigma_i).add(mu_i)
     return sample # [N x D]
+
+def recon_loss(x_1,x_recon):
+    return F.mse_loss(x_1,x_recon)

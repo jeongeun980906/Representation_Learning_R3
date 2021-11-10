@@ -1,12 +1,12 @@
 import torch
+import numpy as np
 import os
 import json
 import matplotlib.pyplot as plt
-from utils.dataloader import torcs_dataset
+from utils.dataloader import torcs_dataset,synthetic_example
 from utils.utils import print_n_txt
-from core.net import NONAME_model
-from core.mixture_network import Mixture_model
-from core.loss import simclr_loss,BT_loss,mdn_loss
+from core.net import MODEL,Decoder,Policy,Encoder
+from core.loss import INFONCE_loss,BT_loss,mdn_loss,recon_loss
 
 import torch.nn.functional as F
 
@@ -24,20 +24,36 @@ class SOLVER():
         self.load_model()
 
     def load_dataset(self):
-        dataset = torcs_dataset(num_traj=self.args.num_traj)
-        self.dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.args.batch_size)
-        self.traj_dim = 3*31
-        self.a_dim = 2
-        self.s_dim = 29
+        if self.args.data == 'torcs':
+            dataset = torcs_dataset(num_traj=self.args.num_traj)
+            self.traj_dim = self.args.num_traj*31
+            self.a_dim = 2
+            self.s_dim = 29
+            self.dim = 31
+        elif self.args.data == 'syn':
+            self.state_samples = 50
+            dataset = synthetic_example(num_traj=self.args.num_traj,state_samples=self.state_samples)
+            self.traj_dim = self.args.num_traj*4
+            self.a_dim = 2
+            self.s_dim = 2
+            self.z_dim = 2
+            self.dim = 4
+            self.update_samples = 5
+        self.dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.args.batch_size,shuffle=True)
 
     def load_model(self):
+        self.encoder = Encoder(x_dim=int(self.args.num_traj*self.dim),z_dim=self.z_dim).to(self.device)
+        self.policy = Policy(s_dim=self.s_dim,a_dim=self.a_dim,z_dim=self.z_dim).to(self.device)
+        # self.model = MODEL(self.args,x_dim=int(self.args.num_traj*self.dim),s_dim=self.s_dim,a_dim=self.a_dim,
+        #                         z_dim=self.z_dim,k=5,sig_max=None).to(self.device)
         if self.args.policy == 'mlp':
-            self.model = NONAME_model(x_dim=int(self.args.num_traj*31)).to(self.device)
             self.weight = [1,1]
         elif self.args.policy == 'mdn':
-            self.model = Mixture_model(x_dim=int(self.args.num_traj*31),k=5,sig_max=None).to(self.device)
             self.weight = [1,0.01]
-        self.model.init_param()
+        self.policy.init_param()
+        self.encoder.init_param()
+        if self.args.recon_loss:
+            self.decoder = Decoder(x_dim=int(self.args.num_traj*self.dim),z_dim=5).to(self.device)
 
     def train(self):
         with open(self.path+'config.json','w') as jf:
@@ -47,36 +63,56 @@ class SOLVER():
         self.ploss = []
         self.eloss = []
         if self.args.loss=='simclr':
-            ecriterion = simclr_loss
+            ecriterion = INFONCE_loss
         elif self.args.loss == 'BT':
             ecriterion = BT_loss
         if self.args.policy == 'mlp':
             pcriterion = F.mse_loss
         elif self.args.policy == 'mdn':
             pcriterion = mdn_loss
-        optimizer = torch.optim.Adam(self.model.parameters(), self.lr)
-        for e in range(10):
+        #optimizer = torch.optim.Adam(self.model.parameters(), self.lr,weight_decay=1e-4)
+        poptimizer = torch.optim.Adam(self.policy.parameters(), self.lr,weight_decay=1e-4)
+        eoptimizer = torch.optim.Adam(self.encoder.parameters(), self.lr,weight_decay=1e-4)
+        for e in range(200):
             total_loss = 0
             ploss = 0
             eloss = 0
-            for expert_traj,fail_traj in self.dataloader:
-                ex_pred,ex_sampled_z = self.model(expert_traj.to(self.device))
-                ex_action = expert_traj[:,self.s_dim+1:self.s_dim+self.a_dim+1].to(self.device)
-
-                f_pred,f_sampled_z = self.model(fail_traj.to(self.device))
-                f_action = fail_traj[:,self.s_dim+1:self.s_dim+self.a_dim+1].to(self.device)
+            for traj_1,traj_2,state_1,action_1,state_2,action_2,_ in self.dataloader:
+                traj_1 = traj_1.view(-1,self.traj_dim).to(self.device)
+                traj_2 = traj_2.view(-1,self.traj_dim).to(self.device)
+                sampled_z_1 = self.encoder(traj_1)
+                sampled_z_2 = self.encoder(traj_2)
+                encoder_loss = ecriterion(sampled_z_1,sampled_z_2) # encoder loss
+                eoptimizer.zero_grad()
+                encoder_loss.backward()
+                eoptimizer.step()
                 
-                encoder_loss = ecriterion(ex_sampled_z,f_sampled_z) # encoder loss
-                policy_loss = pcriterion(ex_pred,ex_action) + pcriterion(f_pred,f_action) # Policy Loss
-                
-                loss = self.weight[0]*encoder_loss + self.weight[1]*policy_loss
-                
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+                piter = self.state_samples//self.update_samples
+                for p in range(piter):
+                    sampled_z_1_s = sampled_z_1.detach().unsqueeze(1).repeat(1,self.update_samples,1).to(self.device)
+                    sampled_z_2_s = sampled_z_2.detach().unsqueeze(1).repeat(1,self.update_samples,1).to(self.device)
+                    state_1_s = state_1[:,p*self.update_samples:(p+1)*self.update_samples,:].to(self.device)
+                    state_2_s = state_2[:,p*self.update_samples:(p+1)*self.update_samples,:].to(self.device)
+                    action_1_s = action_1[:,p*self.update_samples:(p+1)*self.update_samples,:].to(self.device)
+                    #action_1_s = action_1_s.view(-1,self.s_dim)
+                    action_2_s = action_2[:,p*self.update_samples:(p+1)*self.update_samples,:].to(self.device)
+                    input_1 = torch.cat((sampled_z_1_s,state_1_s),dim=-1).view(-1,self.s_dim+self.z_dim)
+                    pred_1 = self.policy(input_1)
+                    print(pred_1[0,:],action_1_s[0,0,:])
+                    pred_2 = self.policy(torch.cat((sampled_z_2_s,state_2_s),dim=-1).view(-1,self.s_dim+self.z_dim))
+                    policy_loss = pcriterion(pred_1,action_1_s.view(-1,self.a_dim).to(self.device)) \
+                                            + pcriterion(pred_2,action_2_s.view(-1,self.a_dim).to(self.device)) # Policy Loss
+                    poptimizer.zero_grad()
+                    policy_loss.backward()
+                    poptimizer.step()
+                loss = self.weight[0]*encoder_loss + self.weight[1]*policy_loss/self.update_samples
+                if self.args.recon_loss:
+                    recon_1 = self.decoder(sampled_z_1)
+                    recon_2 = self.decoder(sampled_z_2)
+                    loss += 0.1*(recon_loss(traj_1,recon_1) + recon_loss(traj_2,recon_2))
                 total_loss += loss
                 eloss += encoder_loss
-                ploss += policy_loss
+                ploss += policy_loss/self.update_samples
             total_loss /= len(self.dataloader)
             eloss /= len(self.dataloader)
             ploss /= len(self.dataloader)
@@ -85,7 +121,8 @@ class SOLVER():
             self.loss.append(total_loss)
             self.eloss.append(eloss)
             self.ploss.append(ploss)
-        torch.save(self.model.state_dict(),self.path+'model_final.pt')
+        torch.save(self.policy.state_dict(),self.path+'policy_final.pt')
+        torch.save(self.encoder.state_dict(),self.path+'encoder_final.pt')
 
     def plot_loss(self):
         plt.figure(figsize=(10,4))
