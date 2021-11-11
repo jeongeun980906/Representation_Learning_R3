@@ -7,12 +7,14 @@ import torch.utils.data as data
 
 expert_dataset_name = ['expert_s.pkl','exert_a.pkl']
 fail_dataset_name = ['fail_s.pkl','fail_a.pkl']
+TORCS_ACTION_FACTOR = 10
 class torcs_dataset(data.Dataset):
     def __init__(self,root='./dataset/',train=True,split=0.1,num_traj=100,state_samples=20):
         self.root = root
         self.num_traj = num_traj
         self.s_dim = 29
         self.a_dim = 2
+        self.state_samples = state_samples
         with open(root + 'expert_s.pkl', 'rb') as f:
             data = pickle.load(f)
         f.close()
@@ -33,6 +35,7 @@ class torcs_dataset(data.Dataset):
             data = pickle.load(f)
         f.close()
         fail_a = np.asarray(data) # [24335 x 2]
+        print(np.mean(fail_a),np.mean(expert_a))
         self.traj_indexes = np.concatenate((indexes_e,indexes_f))
         trajectories_e = np.concatenate((expert_s,expert_a),axis=-1)
         trajectories_f = np.concatenate((fail_s,fail_a),axis=-1) 
@@ -65,7 +68,7 @@ class torcs_dataset(data.Dataset):
         traj_1 = self.trajectories[samples[0]:samples[0]+self.num_traj,:]
         traj_2 = self.trajectories[samples[1]:samples[1]+self.num_traj,:]
         # Sample state, action  
-        random_index_1 = np.random.choice(np.arange(0,self.num_traj),1)
+        random_index_1 = np.random.choice(np.arange(0,self.num_traj),self.state_samples)
         state_1 = traj_1[random_index_1,:self.s_dim].squeeze(0)
         action_1 = traj_1[random_index_1,self.s_dim:].squeeze(0)
         

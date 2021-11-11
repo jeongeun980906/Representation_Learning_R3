@@ -10,8 +10,8 @@ def plot_tsne(data,case,path,config,PN=False):
     case = np.asarray(case)
     unique = np.unique(case)
     filtered_case = np.zeros_like(case,dtype=np.int32)
-    filtered_case = np.where(case!=1.,filtered_case,1)
-    filtered_case = np.where(case!=3.,filtered_case,1)
+    # filtered_case = np.where(case!=1.,filtered_case,1)
+    filtered_case = np.where(case>8.,filtered_case,1)
     num_cases = unique.shape[0]
     if data.shape[1]>2:
         tsne = TSNE(n_components=2, verbose=1, perplexity=40, n_iter=300)

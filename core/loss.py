@@ -59,8 +59,8 @@ def MAINFONCE_loss(u,v):
 
 def BT_loss(u,v):
     '''
-    expert u [N x z]
-    fail v [N x z]
+    traj1 u [N x z]
+    traj2 v [N x z]
     '''
     u = torch.nn.functional.normalize(u,dim=1).unsqueeze(-1)
     v = torch.nn.functional.normalize(v,dim=1)
@@ -68,7 +68,7 @@ def BT_loss(u,v):
     C = torch.bmm(u,v)
     C = torch.mean(C,dim=0) # [z x z]
     mask = torch.eye(C.size(0)).to('cuda')
-    loss = mask*torch.square(1-C) + 0.01*torch.square(C)*(torch.ones_like(mask)-mask)
+    loss = mask*torch.square(1-C) + 0.1*torch.square(C)*(torch.ones_like(mask)-mask)
     loss = torch.sum(loss)
     return loss
 

@@ -1,13 +1,13 @@
 {
-  "data": "syn",
+  "data": "torcs",
   "eval": false,
   "PN": false,
-  "id": 1,
+  "id": 3,
   "simulate": false,
   "batch_size": 4,
   "lr": 0.001,
   "num_traj": 50,
-  "loss": "BT",
+  "loss": "simclr",
   "recon_loss": false,
   "policy": "mlp",
   "encoder": "mlp"

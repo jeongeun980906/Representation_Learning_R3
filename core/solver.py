@@ -25,11 +25,14 @@ class SOLVER():
 
     def load_dataset(self):
         if self.args.data == 'torcs':
-            dataset = torcs_dataset(num_traj=self.args.num_traj)
+            self.state_samples = 50
+            dataset = torcs_dataset(num_traj=self.args.num_traj,state_samples=self.state_samples)
             self.traj_dim = self.args.num_traj*31
             self.a_dim = 2
             self.s_dim = 29
             self.dim = 31
+            self.z_dim = 5
+            self.update_samples = 5
         elif self.args.data == 'syn':
             self.state_samples = 50
             dataset = synthetic_example(num_traj=self.args.num_traj,state_samples=self.state_samples)
@@ -86,7 +89,7 @@ class SOLVER():
                 eoptimizer.zero_grad()
                 encoder_loss.backward()
                 eoptimizer.step()
-                
+                print(state_1.size())
                 piter = self.state_samples//self.update_samples
                 for p in range(piter):
                     sampled_z_1_s = sampled_z_1.detach().unsqueeze(1).repeat(1,self.update_samples,1).to(self.device)
@@ -98,7 +101,7 @@ class SOLVER():
                     action_2_s = action_2[:,p*self.update_samples:(p+1)*self.update_samples,:].to(self.device)
                     input_1 = torch.cat((sampled_z_1_s,state_1_s),dim=-1).view(-1,self.s_dim+self.z_dim)
                     pred_1 = self.policy(input_1)
-                    print(pred_1[0,:],action_1_s[0,0,:])
+                    # print(pred_1[0,:],action_1_s[0,0,:])
                     pred_2 = self.policy(torch.cat((sampled_z_2_s,state_2_s),dim=-1).view(-1,self.s_dim+self.z_dim))
                     policy_loss = pcriterion(pred_1,action_1_s.view(-1,self.a_dim).to(self.device)) \
                                             + pcriterion(pred_2,action_2_s.view(-1,self.a_dim).to(self.device)) # Policy Loss

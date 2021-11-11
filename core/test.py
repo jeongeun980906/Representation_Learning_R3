@@ -19,10 +19,12 @@ class test_class():
             self.dim = 31    
             self.s_dim= 29
             self.a_dim = 2
+            self.z_dim=5
         elif self.config['data'] == 'syn':
             self.dim = 4
             self.s_dim = 2
             self.a_dim = 2
+            self.z_dim = 2
         self.traj_dim = self.config['num_traj']*self.dim
         self.load_model()
 
@@ -36,10 +38,10 @@ class test_class():
         #                        z_dim=2,k=5,sig_max=None).to(self.device)
         #state_dict = torch.load(self.path+'model_final.pt')
         #self.model.load_state_dict(state_dict)
-        self.policy = Policy(s_dim=self.s_dim,a_dim=self.a_dim,z_dim=2).to(self.device)
+        self.policy = Policy(s_dim=self.s_dim,a_dim=self.a_dim,z_dim=self.z_dim).to(self.device)
         state_dict = torch.load(self.path+'policy_final.pt')
         self.policy.load_state_dict(state_dict)
-        self.encoder = Encoder(x_dim=int(self.config['num_traj']*self.dim),z_dim=2).to(self.device)
+        self.encoder = Encoder(x_dim=int(self.config['num_traj']*self.dim),z_dim=self.z_dim).to(self.device)
         state_dict = torch.load(self.path+'encoder_final.pt')
         self.encoder.load_state_dict(state_dict)
 
