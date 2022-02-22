@@ -87,48 +87,94 @@ class torcs_dataset(data.Dataset):
 MAX_LEN = 100
 
 class synthetic_example(data.Dataset):
-    def __init__(self,path = './dataset/sdata_6.json',num_traj=50,state_samples=40):
+    def __init__(self,path = './dataset/sdata_6.json',state_only=True,fixed_len=False,num_traj=50,state_samples=40):
         self.num_traj = num_traj
         self.path = path
         self.state_samples = state_samples
         with open(self.path,'r') as jf:
             data = json.load(jf)
         self.traj_type=[]
-        self.traj = torch.zeros((len(data),MAX_LEN*4))
         self.traj_len=[]
+        self.state_only= state_only
+        self.fixed_len = fixed_len
+        if self.state_only:
+            self.traj = torch.zeros((len(data),MAX_LEN*2))
+            self.actions = torch.zeros((len(data),MAX_LEN*2))
+        else:
+            self.traj = torch.zeros((len(data),MAX_LEN*4))
         # Load Data
         for key in data:
             self.traj_type.append([data[key]['vel'],data[key]['noise'],data[key]['type']])
             traj_len = len(data[key]['states'][0])
             self.traj_len.append(traj_len)
-            traj = torch.zeros((4*traj_len))
-            traj[0::4] = torch.FloatTensor(data[key]['states'][0])
-            traj[1::4] = torch.FloatTensor(data[key]['states'][1])
-            traj[2::4] = torch.cat((torch.FloatTensor(data[key]['actions'][0]),torch.zeros(1)),dim=-1)*10
-            traj[3::4] = torch.cat((torch.FloatTensor(data[key]['actions'][1]),torch.zeros(1)),dim=-1)*10
-            traj = traj.repeat(int((MAX_LEN)/(traj_len)))
+            if self.state_only:
+                traj = torch.zeros((2*traj_len))
+                actions = torch.zeros((2*traj_len))
+                traj[0::2] = torch.FloatTensor(data[key]['states'][0])
+                traj[1::2] = torch.FloatTensor(data[key]['states'][1])
+                traj = traj.repeat(int((MAX_LEN)/(traj_len)))
+                actions[0::2] = torch.cat((torch.FloatTensor(data[key]['actions'][0]),torch.zeros(1)),dim=-1)*10
+                actions[1::2] = torch.cat((torch.FloatTensor(data[key]['actions'][1]),torch.zeros(1)),dim=-1)*10
+                actions = actions.repeat(int((MAX_LEN)/(traj_len)))
+                self.actions[int(key),:] = actions
+            else:
+                traj = torch.zeros((4*traj_len))
+                traj[0::4] = torch.FloatTensor(data[key]['states'][0])
+                traj[1::4] = torch.FloatTensor(data[key]['states'][1])
+                traj[2::4] = torch.cat((torch.FloatTensor(data[key]['actions'][0]),torch.zeros(1)),dim=-1)*10
+                traj[3::4] = torch.cat((torch.FloatTensor(data[key]['actions'][1]),torch.zeros(1)),dim=-1)*10
+                traj = traj.repeat(int((MAX_LEN)/(traj_len)))
             self.traj[int(key),:] = traj
         self.traj_type = torch.FloatTensor(self.traj_type)
     
     def __getitem__(self, index):
         traj = self.traj[index,:]
         traj_type = self.traj_type[index]
-        sampled = torch.randperm(MAX_LEN-self.num_traj)
+        if self.fixed_len:
+            traj_len = self.num_traj
+            reduced = 0
+        else:
+            reduced = random.randint(1,10) 
+            traj_len = self.num_traj - reduced
+        sampled = torch.randperm(MAX_LEN-traj_len)
         # sampled = random.choice([0,25,50],2)
-        traj_1 = traj[4*sampled[0]:4*sampled[0]+self.num_traj*4]
-        sampled_sa = torch.randperm(self.num_traj)[:self.state_samples]
-        states= torch.cat((traj_1[0::4].unsqueeze(-1),traj_1[1::4].unsqueeze(-1)),dim=-1)
-        actions= torch.cat((traj_1[2::4].unsqueeze(-1),traj_1[3::4].unsqueeze(-1)),dim=-1)
-        state_1 = states[sampled_sa,:]
-        action_1 = actions[sampled_sa,:]
+        if self.state_only:
+            temp = torch.zeros((reduced*2))
+            traj_1 = traj[2*sampled[0]:2*sampled[0]+traj_len*2]
+            states1= torch.cat((traj_1[0::2].unsqueeze(-1),traj_1[1::2].unsqueeze(-1)),dim=-1)
+            actions1 = self.actions[index,2*sampled[0]:2*sampled[0]+traj_len*2]
+            actions1= torch.cat((actions1[0::2].unsqueeze(-1),actions1[1::2].unsqueeze(-1)),dim=-1)
+            traj_1 = torch.cat((traj_1,temp),axis=0)
 
-        traj_2 = traj[4*sampled[1]:4*sampled[1]+self.num_traj*4]
-        states= torch.cat((traj_2[0::4].unsqueeze(-1),traj_2[1::4].unsqueeze(-1)),dim=-1)
-        actions= torch.cat((traj_2[2::4].unsqueeze(-1),traj_2[3::4].unsqueeze(-1)),dim=-1)
-        state_2 = states[sampled_sa,:]
-        action_2 = actions[sampled_sa,:]
+            traj_2 = traj[2*sampled[1]:2*sampled[1]+traj_len*2]
+            states2= torch.cat((traj_2[0::2].unsqueeze(-1),traj_2[1::2].unsqueeze(-1)),dim=-1)
+            actions2 = self.actions[index,2*sampled[1]:2*sampled[1]+traj_len*2]
+            actions2= torch.cat((actions2[0::2].unsqueeze(-1),actions2[1::2].unsqueeze(-1)),dim=-1)
+            traj_2 = torch.cat((traj_2,temp),axis=0)
+
+            sampled_sa = torch.randperm(traj_len)[:self.state_samples]
+            state_1 = states1[sampled_sa,:]
+            action_1 = actions1[sampled_sa,:]
+
+            state_2 = states2[sampled_sa,:]
+            action_2 = actions2[sampled_sa,:]
+        else:
+            traj_1 = traj[4*sampled[0]:4*sampled[0]+traj_len*4]
+            states1= torch.cat((traj_1[0::4].unsqueeze(-1),traj_1[1::4].unsqueeze(-1)),dim=-1)
+            actions1= torch.cat((traj_1[2::4].unsqueeze(-1),traj_1[3::4].unsqueeze(-1)),dim=-1)
+            
+            traj_2 = traj[4*sampled[1]:4*sampled[1]+traj_len*4]
+            states2= torch.cat((traj_2[0::4].unsqueeze(-1),traj_2[1::4].unsqueeze(-1)),dim=-1)
+            actions2= torch.cat((traj_2[2::4].unsqueeze(-1),traj_2[3::4].unsqueeze(-1)),dim=-1)
         
-        return traj_1,traj_2,state_1,action_1,state_2,action_2,traj_type
+            sampled_sa = torch.randperm(traj_len)[:self.state_samples]
+            state_1 = states1[sampled_sa,:]
+            action_1 = actions1[sampled_sa,:]
+
+            state_2 = states2[sampled_sa,:]
+            action_2 = actions2[sampled_sa,:]
+        
+        return traj_1,traj_2,state_1,action_1,state_2,action_2,traj_type,traj_len
     
     def __len__(self):
         return self.traj.size(0)

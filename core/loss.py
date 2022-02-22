@@ -26,7 +26,6 @@ def INFONCE_loss(u,v):
     # print(z)
     z = torch.nn.functional.normalize(z, dim=-1)
     s = torch.matmul(z, z.T) # [2N x 2N]
-    # print(s)
     loss = 0
     for k in range(N):
         loss+= l1(2*k,2*k+1,s)+l1(2*k+1,2*k,s)
